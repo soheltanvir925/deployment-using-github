@@ -56,7 +56,7 @@ jobs:
       - name: display test results
         run: cat test-results.txt
 
-      - name: install pm2 for process management
+      - name: install pm2 globally
         run: npm install -g pm2
 
       - name: Deploy to production server
