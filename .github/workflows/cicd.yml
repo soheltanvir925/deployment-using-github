@@ -1,0 +1,68 @@
+name: cicd pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm run check > test-results.txt
+      
+      - name: upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-artifact
+          path: test-results.txt
+
+  deploy:
+    needs: test
+    runs-on: self-hosted
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: set up node 
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      
+      - name: install dependencies
+        run: npm install
+      
+      - name: download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-artifact
+          
+      - name: display test results
+        run: cat test-results.txt
+
+      - name: install pm2
+        run: npm install -g pm2
+
+      - name: Deploy to production server
+        run: |
+          ls -a
+          pm2 delete "Server" || true
+          pm2 start "npm start" --name="Server"
+
+ 
