@@ -47,22 +47,55 @@ jobs:
       
       - name: install dependencies
         run: npm install
-      
+
+      - name: Install production dependencies
+        run: npm install --only=production
+
       - name: download test results using artifact
         uses: actions/download-artifact@v4
         with:
           name: test-results-artifact
           
-      - name: display test results
-        run: cat test-results.txt
-
-      - name: install pm2 globally
-        run: npm install -g pm2
-
-      - name: Deploy to production server
-        run: |
-          ls -a
-          pm2 delete "Server" || true
-          pm2 start "npm start" --name="Server"
-
- 
+      - name: Upload project to EC2 
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."
+          target: ${{ secrets.EC2_TARGET_PATH }}
+          exclude: |
+            .git/
+            .github/
+            node_modules/
+            test-results.txt
+            *.log
+            test-results.txt
+          
+      - name: Run deploy commands on EC2
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.EC2_TARGET_PATH }}
+            # ensure node/npm is installed (adjust as necessary for your environment)
+            if ! command -v node &> /dev/null
+            then
+              echo "Node.js could not be found, installing..."
+              curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            # ensure pm2 is installed
+            if ! command -v pm2 &> /dev/null
+            then
+              echo "pm2 could not be found, installing..."
+              sudo npm install -g pm2
+            fi
+            npm ci --only=production
+            # Restart the application using pm2
+            pm2 describe app || pm2 start npm --name "app" -- start
+            pm2 restart app
+            pm2 save
